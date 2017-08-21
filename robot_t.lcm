@@ -1,0 +1,7 @@
+package vehicle_sim;
+
+struct robot_t {
+    double motor_left;
+    double motor_right;
+    double lidar_angle;
+}
