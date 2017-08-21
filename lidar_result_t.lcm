@@ -1,0 +1,7 @@
+package vehicle_sim;
+
+struct lidar_result_t {
+    double distance;
+    double intensity;
+    double lidar_angle;
+}
