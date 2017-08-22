@@ -6,14 +6,14 @@
 #include <time.h>
 #include <math.h>
 #include <stdbool.h>
-#include "lcm_handle_async.h"
-#include "vehicle_sim_orientation_t.h"
-#include "vehicle_sim_robot_t.h"
-#include "vehicle_sim_lidar_result_t.h"
-#include "world.h"
+#include "learn_common/lcm_handle_async.h"
+#include "lcmtypes/vehicle_sim_orientation_t.h"
+#include "lcmtypes/vehicle_sim_robot_t.h"
+#include "lcmtypes/vehicle_sim_lidar_result_t.h"
+#include "world/world.h"
 
 #define PI 3.1415926535897932384626
-#define LIDAR_DIST_DELTA 0.1
+#define LIDAR_DIST_DELTA 0.025
 
 #define UPDATE_MS 20
 
@@ -34,10 +34,12 @@ static void republish_lidar(lcm_t *lcm)
 
     bool did_hit_something = false;
 
+    //printf("starting at %.2f %.2f\n", ray_x, ray_y);
+
     vehicle_sim_lidar_result_t result = {0, 0, lidar_angle};
     while(ray_x >= 0 && ray_x < MAP_WIDTH && ray_y >= 0 && ray_y < MAP_HEIGHT) {
         char map_c = map[(int)(ray_y + 0.5) * MAP_WIDTH + (int)(ray_x + 0.5)];
-        //printf("%.2f %.2f -> %d %d\n", ray_x, ray_y, (int)(ray_x + 0.5), (int)(ray_y + 0.5));
+        //printf("%.2f %.2f -> %d %d at %.2f\n", ray_x, ray_y, (int)(ray_x + 0.5), (int)(ray_y + 0.5), result.distance);
         if (map_c == 'o') {
             result.intensity = 0.5;
             did_hit_something = true;
@@ -49,12 +51,14 @@ static void republish_lidar(lcm_t *lcm)
         }
         result.distance += LIDAR_DIST_DELTA;
         ray_x += cos_angle * LIDAR_DIST_DELTA;
-        ray_y += sin_angle * LIDAR_DIST_DELTA;
+        ray_y -= sin_angle * LIDAR_DIST_DELTA;
     }
 
     if (!did_hit_something) {
         result.distance = 0; // everything off the screen is an obstacle!
     }
+
+    printf("world x: %.2f y: %.2f angle: %.2f lidar angle: %.2f total: %.2f distance: %.2f\n", x, y, angle, lidar_angle, total_angle, result.distance);
 
     vehicle_sim_lidar_result_t_publish(lcm, "LIDAR", &result);
 }
@@ -71,7 +75,6 @@ static void receive_robot(const lcm_recv_buf_t *rbuf, const char *channel,
                                 const vehicle_sim_robot_t *msg, void *user)
 {
     lidar_angle = msg->lidar_angle;
-    republish_lidar((lcm_t*)user);
 }
 
 int main(int argc, char **argv)
@@ -87,8 +90,8 @@ int main(int argc, char **argv)
 
     while (1) {
         lcm_handle_async(lcm);
-        nanosleep(&(struct timespec){0, (UPDATE_MS * 1e6)}, NULL);
         republish_lidar(lcm);
+        nanosleep(&(struct timespec){0, (UPDATE_MS * 1e6)}, NULL);
     }
 
     lcm_destroy(lcm);
